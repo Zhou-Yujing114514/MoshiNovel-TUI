@@ -17,6 +17,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+__version__ = "1.1.0"
+
 BASE_URL = os.environ.get("MOSHI_BASE_URL", "https://morax.kdns.fr")
 
 # 颜色（终端支持时启用）
@@ -36,16 +38,51 @@ BLUE = _c(34)
 
 # 会话
 _opener = None
+_cookie_jar = None
 _current_user = None
 
 
+def _cookie_path():
+    cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(
+        os.path.expanduser("~"), ".config")
+    return os.path.join(cfg, "moshi_tui", "cookies.lwp")
+
+
 def make_opener():
-    global _opener
-    jar = http.cookiejar.CookieJar()
+    """创建带持久化 Cookie 的 opener。Cookie 文件权限 600，避免会话泄露。"""
+    global _opener, _cookie_jar
+    path = _cookie_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        os.chmod(os.path.dirname(path), 0o700)
+    except OSError:
+        pass
+    _cookie_jar = http.cookiejar.LWPCookieJar(path)
+    if os.path.exists(path):
+        try:
+            _cookie_jar.load(ignore_discard=True, ignore_expires=True)
+        except (http.cookiejar.LoadError, OSError, ValueError):
+            pass
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     _opener = urllib.request.build_opener(
-        urllib.request.HTTPCookieProcessor(jar)
+        urllib.request.HTTPCookieProcessor(_cookie_jar)
     )
     _opener.addheaders = [("Content-Type", "application/json")]
+
+
+def _save_cookies():
+    """把会话 Cookie 落盘，并确保文件权限为 600。"""
+    global _cookie_jar
+    try:
+        path = _cookie_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        _cookie_jar.save(ignore_discard=True, ignore_expires=True)
+        os.chmod(path, 0o600)
+    except Exception:
+        pass
 
 
 def api(method, path, body=None):
@@ -114,7 +151,11 @@ def cmd_download(args):
     if fmt not in ("txt", "epub", "pdf"):
         print(f"{RED}格式仅支持 txt / epub / pdf{RESET}")
         return
-    st, resp = api("POST", "/api/tasks", body={"book_id": book["book_id"], "format": fmt})
+    bid = book.get("book_id")
+    if not bid:
+        print(f"{RED}搜索结果缺少书籍 ID{RESET}")
+        return
+    st, resp = api("POST", "/api/tasks", body={"book_id": bid, "format": fmt})
     if isinstance(resp, dict) and resp.get("ok"):
         pos = resp.get("position")
         print(f"{GREEN}已提交「{book['title']}」({fmt.upper()}){RESET}"
@@ -142,7 +183,8 @@ def _task_line(t, me, show_user):
     user = f" [{t.get('username')}]" if show_user and t.get("username") else ""
     pos = f" (#{t.get('position')})" if state == "queued" and t.get("position") is not None else ""
     err = f" {RED}{t.get('error')}{RESET}" if t.get("error") else ""
-    return f"  {CYAN}{t['id']:>5}{RESET} {t.get('title') or '?'[:30]:<34} {fmt:>4} {mark}{pos} {DIM}{extra}{RESET}{user}{err}"
+    title = str(t.get("title") or "?")[:34]
+    return f"  {CYAN}{t['id']:>5}{RESET} {title:<34} {fmt:>4} {mark}{pos} {DIM}{extra}{RESET}{user}{err}"
 
 
 def cmd_tasks(args):
@@ -166,19 +208,29 @@ def cmd_tasks(args):
 
 def _download_file(url, dest):
     req = urllib.request.Request(url, headers={"User-Agent": "MoshiNovel-TUI"})
-    with _opener.open(req, timeout=60) as resp, open(dest, "wb") as f:
-        total = int(resp.headers.get("Content-Length") or 0)
-        done = 0
-        while True:
-            chunk = resp.read(65536)
-            if not chunk:
-                break
-            f.write(chunk)
-            done += len(chunk)
-            if total:
-                pct = done * 100 // total
-                print(f"\r{DIM}下载中 {pct}% ({done}/{total}){RESET}", end="", flush=True)
-    print()
+    try:
+        with _opener.open(req, timeout=60) as resp, open(dest, "wb") as f:
+            total = int(resp.headers.get("Content-Length") or 0)
+            done = 0
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                f.write(chunk)
+                done += len(chunk)
+                if total:
+                    pct = done * 100 // total
+                    print(f"\r{DIM}下载中 {pct}% ({done}/{total}){RESET}", end="", flush=True)
+        print()
+        return True
+    except Exception as e:
+        print(f"\r{RED}下载失败: {e}{RESET}")
+        try:
+            if os.path.exists(dest):
+                os.remove(dest)
+        except OSError:
+            pass
+        return False
 
 
 def cmd_fetch(args):
@@ -201,8 +253,8 @@ def cmd_fetch(args):
     fmt = task.get("format") or "txt"
     dest = args.out or f"{task.get('title') or 'book'}.{fmt}"
     print(f"{DIM}保存到: {dest}{RESET}")
-    _download_file(url, dest)
-    print(f"{GREEN}完成 → {dest}{RESET}")
+    if _download_file(url, dest):
+        print(f"{GREEN}完成 → {dest}{RESET}")
 
 
 def cmd_watch(args):
@@ -232,7 +284,11 @@ def cmd_preview(args):
         print(f"{RED}没有找到这本书{RESET}")
         return
     book = items[0]
-    st, resp = api("POST", "/api/tasks", body={"book_id": book["book_id"], "format": "epub"})
+    bid = book.get("book_id")
+    if not bid:
+        print(f"{RED}搜索结果缺少书籍 ID{RESET}")
+        return
+    st, resp = api("POST", "/api/tasks", body={"book_id": bid, "format": "epub"})
     if isinstance(resp, dict) and resp.get("ok"):
         print(f"{GREEN}预览任务已提交（任务 #{resp.get('id')}）{RESET}")
         print(f"{DIM}完成后可用 read <任务ID> 在线阅读{RESET}")
@@ -335,6 +391,8 @@ def main():
         prog="moshi_tui",
         description="摩柿小说下载站 (MoshiNovel) 终端版",
     )
+    parser.add_argument("--version", action="version",
+                        version=f"moshi_tui {__version__}")
     sub = parser.add_subparsers(dest="cmd")
 
     p = sub.add_parser("search", help="搜索小说")
@@ -390,6 +448,8 @@ def main():
         args.func(args)
     except KeyboardInterrupt:
         print()
+    finally:
+        _save_cookies()
 
 
 if __name__ == "__main__":
