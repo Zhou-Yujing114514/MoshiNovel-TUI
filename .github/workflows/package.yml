@@ -1,0 +1,33 @@
+name: Package TUI
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check
+        run: python3 -m py_compile moshi_tui.py
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp moshi_tui.py README.md dist/
+          tar czf MoshiNovel-TUI.tar.gz -C dist .
+          (cd dist && zip -r ../MoshiNovel-TUI.zip .)
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            MoshiNovel-TUI.tar.gz
+            MoshiNovel-TUI.zip
