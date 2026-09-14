@@ -249,7 +249,13 @@ def cmd_read(args):
     except Exception as e:
         print(f"{RED}读取失败: {e}{RESET}")
         return
-    cl = chapters.get("items", []) if isinstance(chapters, dict) else []
+    # /chapters 返回 JSON 数组；个别旧版可能返回 {items:[]}，两种都兼容
+    if isinstance(chapters, list):
+        cl = chapters
+    elif isinstance(chapters, dict):
+        cl = chapters.get("items", [])
+    else:
+        cl = []
     if not cl:
         print(f"{YELLOW}暂无章节（任务可能仍在下载）{RESET}")
         return
