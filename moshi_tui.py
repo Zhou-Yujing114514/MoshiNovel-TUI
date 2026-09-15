@@ -8,6 +8,7 @@
 依赖：仅 Python 3.8+ 标准库（urllib / json / http.cookiejar）。
 """
 import argparse
+import getpass
 import http.cookiejar
 import json
 import os
@@ -20,6 +21,29 @@ import urllib.request
 __version__ = "1.1.0"
 
 BASE_URL = os.environ.get("MOSHI_BASE_URL", "https://morax.kdns.fr")
+
+
+def _sanitize_filename(name):
+    """把服务端返回的书名净化为安全的本地文件名：
+    - 只取 basename（去掉目录成分 / 盘符）
+    - 过滤 .. 、路径分隔符、非法字符
+    """
+    s = (name or "book").strip()
+    # 统一分隔符并只取最后一段，避免 ../ 或 绝对路径
+    s = s.replace("\\", "/")
+    if "/" in s:
+        s = s.split("/")[-1]
+    # 去掉 Windows 盘符前缀
+    if len(s) >= 2 and s[1] == ":":
+        s = s[2:]
+    # 替换非法字符
+    for ch in '\\/:*?"<>|':
+        s = s.replace(ch, "_")
+    # 折叠 ..
+    s = s.replace("..", "_")
+    # 去掉前导点/空格
+    s = s.lstrip(" .")
+    return s or "book"
 
 # 颜色（终端支持时启用）
 def _c(code):
@@ -251,7 +275,12 @@ def cmd_fetch(args):
     if not url.startswith("http"):
         url = BASE_URL + (url if url.startswith("/") else "/" + url)
     fmt = task.get("format") or "txt"
-    dest = args.out or f"{task.get('title') or 'book'}.{fmt}"
+    if args.out:
+        dest = args.out
+    else:
+        # 服务端 title 不可信：过滤掉路径分隔符、..、盘符等，避免路径穿越
+        safe_title = _sanitize_filename(task.get("title") or "book")
+        dest = f"{safe_title}.{fmt}"
     print(f"{DIM}保存到: {dest}{RESET}")
     if _download_file(url, dest):
         print(f"{GREEN}完成 → {dest}{RESET}")
@@ -338,7 +367,15 @@ def cmd_read(args):
 def cmd_login(args):
     global _current_user
     username = args.username or input("用户名: ").strip()
-    password = args.password or input("密码: ")
+    # 密码不再通过命令行位置参数传入（会出现在 shell 历史 / 进程列表中）。
+    # 若未显式提供 --password，则用 getpass 不回显输入。
+    password = getattr(args, "password", None)
+    if not password:
+        try:
+            password = getpass.getpass("密码: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
     st, resp = api("POST", "/api/login", body={"username": username, "password": password})
     user = resp.get("user") if isinstance(resp, dict) else None
     if user:
@@ -427,7 +464,9 @@ def main():
 
     p = sub.add_parser("login", help="登录")
     p.add_argument("username", nargs="?")
-    p.add_argument("password", nargs="?")
+    # 密码不再接受位置参数（会泄漏到 shell 历史 / ps 输出）。
+    # 未提供时强制用 getpass 不回显输入。--password 仅用于脚本，不推荐。
+    p.add_argument("--password", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_login)
 
     p = sub.add_parser("logout", help="退出登录")
