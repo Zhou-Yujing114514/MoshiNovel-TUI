@@ -43,3 +43,12 @@ python3 moshi_tui.py login 用户名
 - 网页版：https://morax.kdns.fr
 - iOS 原生版：https://github.com/Zhou-Yujing114514/MoshiNovel-iOS
 - 虚空终端 TUI：https://github.com/Zhou-Yujing114514/VoidTerminal-TUI
+
+## 更新日志
+
+### v1.1.0
+- 服务端书源扩充，可检索 / 可下载的书籍来源进一步增多
+- 杂源搜索优化，提升杂源结果的相关性与响应稳定性
+- 修复在线阅读章节接口，解决章节内容偶发解析失败
+- 会话 Cookie 持久化到 `~/.config/moshi_tui/`（文件权限 600），下载文件名经净化处理
+
