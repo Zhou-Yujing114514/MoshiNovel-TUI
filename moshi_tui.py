@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-__version__ = "1.1.0"
+__version__ = "2.2.1"
 
 BASE_URL = os.environ.get("MOSHI_BASE_URL", "https://morax.kdns.fr")
 
