@@ -387,9 +387,18 @@ def cmd_login(args):
 
 
 def cmd_logout(args):
-    global _current_user
+    global _current_user, _cookie_jar
     api("POST", "/api/logout", body={})
     _current_user = None
+    # 清理本地 Cookie，防止被自动登回
+    if _cookie_jar is not None:
+        _cookie_jar.clear()
+    try:
+        path = _cookie_path()
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
     print(f"{GREEN}已退出登录{RESET}")
 
 
