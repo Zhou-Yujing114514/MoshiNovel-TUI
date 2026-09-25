@@ -113,7 +113,7 @@ def api(method, path, body=None):
     """调用摩柿 API，返回 (status, json|text)。"""
     url = BASE_URL + path
     data = None
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "User-Agent": "MoshiNovel-TUI"}
     if body is not None:
         data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
@@ -180,7 +180,7 @@ def cmd_download(args):
         print(f"{RED}搜索结果缺少书籍 ID{RESET}")
         return
     st, resp = api("POST", "/api/tasks", body={"book_id": bid, "format": fmt})
-    if isinstance(resp, dict) and resp.get("ok"):
+    if isinstance(resp, dict) and (resp.get("ok") or resp.get("id")):
         pos = resp.get("position")
         print(f"{GREEN}已提交「{book['title']}」({fmt.upper()}){RESET}"
               + (f"，队列位置 #{pos}" if pos is not None else ""))
@@ -318,7 +318,7 @@ def cmd_preview(args):
         print(f"{RED}搜索结果缺少书籍 ID{RESET}")
         return
     st, resp = api("POST", "/api/tasks", body={"book_id": bid, "format": "epub"})
-    if isinstance(resp, dict) and resp.get("ok"):
+    if isinstance(resp, dict) and (resp.get("ok") or resp.get("id")):
         print(f"{GREEN}预览任务已提交（任务 #{resp.get('id')}）{RESET}")
         print(f"{DIM}完成后可用 read <任务ID> 在线阅读{RESET}")
     else:
