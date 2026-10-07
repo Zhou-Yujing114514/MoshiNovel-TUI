@@ -20,7 +20,7 @@ import urllib.request
 
 __version__ = "1.1.0"
 
-BASE_URL = os.environ.get("MOSHI_BASE_URL", "https://sswwgzs.cn")
+BASE_URL = os.environ.get("MOSHI_BASE_URL", "https://morax.sswwgzs.cn")
 
 
 def _sanitize_filename(name):

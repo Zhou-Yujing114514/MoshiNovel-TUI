@@ -1,6 +1,6 @@
 # 摩柿小说下载站 · 终端版 TUI (MoshiNovel-TUI)
 
-摩拉克斯牌洋柿子小说下载站的命令行客户端，纯 Python 3.8+ 标准库实现，零第三方依赖，对接 `https://sswwgzs.cn`。
+摩拉克斯牌洋柿子小说下载站的命令行客户端，纯 Python 3.8+ 标准库实现，零第三方依赖，对接 `https://morax.sswwgzs.cn`。
 
 ## 功能
 
@@ -40,6 +40,6 @@ python3 moshi_tui.py login 用户名
 
 ## 相关项目
 
-- 网页版：https://sswwgzs.cn
+- 网页版：https://morax.sswwgzs.cn
 - iOS 原生版：https://github.com/Zhou-Yujing114514/MoshiNovel-iOS
 - 虚空终端 TUI：https://github.com/Zhou-Yujing114514/VoidTerminal-TUI
